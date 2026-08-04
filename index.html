@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dr.Strange Shield</title>
+    <style>
+        /* Modern deep navy background with plenty of negative space */
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #0B132B;
+            height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            color: #ffffff;
+        }
+
+        /* Container to stack the UI exactly on top of the video */
+        .app-container {
+            position: relative;
+            width: 100%;
+            max-width: 1100px;
+            display: flex;
+            justify-content: center;
+        }
+
+        /* The webcam output */
+        canvas {
+            transform: scaleX(-1);
+            width: 100%;
+            border-radius: 16px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            background-color: #000;
+        }
+
+        /* Sleek, frosted glassmorphism panels */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 15px 25px;
+            position: absolute;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+        }
+
+
+        /* Glowing Orange Accent */
+        .accent {
+            color: #FF8C00;
+            text-shadow: 0 0 10px rgba(255, 140, 0, 0.6);
+        }
+
+        /* Instructions & Live Status UI */
+        .status-card {
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 350px;
+        }
+
+        .status-card p {
+            margin: 5px 0 10px 0;
+            font-size: 0.95rem;
+            opacity: 0.8;
+        }
+
+        .status-indicator {
+            font-size: 1.1rem;
+            font-weight: 600;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+    </style>
+
+    <!-- Load MediaPipe Web Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+
+<body>
+
+    <div class="app-container">
+
+
+        <!-- UI Status Footer -->
+        <div class="glass-panel status-card">
+            <p>Hold up your hand and form a <strong>closed fist</strong></p>
+            <div id="status-text" class="status-indicator" style="color: #aaaaaa;">
+                Initializing Camera...
+            </div>
+        </div>
+
+        <!-- Hidden video elements -->
+        <video id="webcam" autoplay playsinline style="display:none;"></video>
+        <video id="shieldVideo" src="shield.mp4" loop muted autoplay playsinline style="display:none;"></video>
+
+        <!-- Visible canvas -->
+        <canvas id="output_canvas" width="1280" height="720"></canvas>
+
+    </div>
+
+    <script>
+        const videoElement = document.getElementById('webcam');
+        const shieldVideo = document.getElementById('shieldVideo');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const statusText = document.getElementById('status-text');
+
+        function calculateDistance(p1, p2) {
+            return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+        }
+
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            let isCasting = false;
+            let handsVisible = false;
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                handsVisible = true;
+
+                for (const landmarks of results.multiHandLandmarks) {
+                    const wrist = landmarks[0];
+                    const middleFingerBase = landmarks[9];
+                    const middleFingerTip = landmarks[12];
+                    const indexKnuckle = landmarks[5];
+                    const pinkyKnuckle = landmarks[17];
+
+                    const distTipToWrist = calculateDistance(wrist, middleFingerTip);
+                    const distBaseToWrist = calculateDistance(wrist, middleFingerBase);
+
+                    if (distTipToWrist < distBaseToWrist + 0.05) {
+                        isCasting = true;
+
+                        const palmWidth = calculateDistance(indexKnuckle, pinkyKnuckle) * canvasElement.width;
+                        const shieldSize = palmWidth * 5.0;
+
+                        const cx = wrist.x * canvasElement.width;
+                        const cy = wrist.y * canvasElement.height;
+
+                        canvasCtx.globalCompositeOperation = 'screen';
+
+                        if (shieldVideo.readyState >= 2) {
+                            canvasCtx.drawImage(
+                                shieldVideo,
+                                cx - (shieldSize / 2),
+                                cy - (shieldSize / 2),
+                                shieldSize,
+                                shieldSize
+                            );
+                        }
+                        canvasCtx.globalCompositeOperation = 'source-over';
+                    }
+                }
+            }
+            canvasCtx.restore();
+
+            // Dynamically update the UI based on what the AI sees
+            if (isCasting) {
+                statusText.innerText = "🔥 Spell Cast: Shield Active!";
+                statusText.style.color = "#FF8C00";
+                statusText.style.boxShadow = "0 0 15px rgba(255, 140, 0, 0.4)";
+            } else if (handsVisible) {
+                statusText.innerText = "Tracking Hand Gestures...";
+                statusText.style.color = "#4CAF50"; // Green for tracking
+                statusText.style.boxShadow = "none";
+            } else {
+                statusText.innerText = "Waiting for hands...";
+                statusText.style.color = "#ffffff";
+                statusText.style.boxShadow = "none";
+            }
+        }
+
+        const hands = new Hands({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            }
+        });
+
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.7
+        });
+        hands.onResults(onResults);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({ image: videoElement });
+            },
+            width: 1280,
+            height: 720
+        });
+
+        camera.start();
+    </script>
+</body>
+
+</html>
