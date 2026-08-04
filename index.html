@@ -64,7 +64,7 @@
             text-shadow: 0 0 10px rgba(255, 140, 0, 0.6);
         }
 
-        /* New Settings UI */
+        /* Settings UI */
         .settings-card {
             top: 20px;
             right: 20px;
@@ -131,7 +131,7 @@
             <h1>Mystic Arts <span class="accent">Tracker</span></h1>
         </div>
 
-        <!-- New Settings Panel -->
+        <!-- Settings Panel -->
         <div class="glass-panel settings-card">
             <h3>⚙️ Settings</h3>
 
@@ -178,12 +178,16 @@
 
         const speedSlider = document.getElementById('speedSlider');
         const speedValue = document.getElementById('speedValue');
+        let rotationSpeed = 1.0;
 
         speedSlider.addEventListener('input', (e) => {
-            const speed = parseFloat(e.target.value);
-            shieldVideo.playbackRate = speed; // Adjusts the video's natural animation speed
-            speedValue.innerText = speed.toFixed(1);
+            rotationSpeed = parseFloat(e.target.value);
+            shieldVideo.playbackRate = rotationSpeed;
+            speedValue.innerText = rotationSpeed.toFixed(1);
         });
+
+        // Variable to track the physical spinning angle
+        let currentAngle = 0;
 
         function calculateDistance(p1, p2) {
             return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
@@ -214,23 +218,33 @@
                         isCasting = true;
 
                         const palmWidth = calculateDistance(indexKnuckle, pinkyKnuckle) * canvasElement.width;
-
-                        // Apply the dynamic size multiplier from the slider
                         const shieldSize = palmWidth * currentSizeMultiplier;
 
                         const cx = wrist.x * canvasElement.width;
                         const cy = wrist.y * canvasElement.height;
 
+                        // Increment the physical angle based on the slider speed
+                        currentAngle += (5 * rotationSpeed);
+
                         canvasCtx.globalCompositeOperation = 'screen';
 
                         if (shieldVideo.readyState >= 2) {
+                            // Save un-rotated state
+                            canvasCtx.save();
+
+                            // Move center to wrist, apply rotation, and draw
+                            canvasCtx.translate(cx, cy);
+                            canvasCtx.rotate(currentAngle * Math.PI / 180);
                             canvasCtx.drawImage(
                                 shieldVideo,
-                                cx - (shieldSize / 2),
-                                cy - (shieldSize / 2),
+                                -shieldSize / 2,
+                                -shieldSize / 2,
                                 shieldSize,
                                 shieldSize
                             );
+
+                            // Restore state so background doesn't spin
+                            canvasCtx.restore();
                         }
                         canvasCtx.globalCompositeOperation = 'source-over';
                     }
@@ -238,18 +252,23 @@
             }
             canvasCtx.restore();
 
+            // Update UI based on detection
             if (isCasting) {
                 statusText.innerText = "🔥 Spell Cast: Shield Active!";
                 statusText.style.color = "#FF8C00";
                 statusText.style.boxShadow = "0 0 15px rgba(255, 140, 0, 0.4)";
-            } else if (handsVisible) {
-                statusText.innerText = "Tracking Hand Gestures...";
-                statusText.style.color = "#4CAF50";
-                statusText.style.boxShadow = "none";
             } else {
-                statusText.innerText = "Waiting for hands...";
-                statusText.style.color = "#ffffff";
-                statusText.style.boxShadow = "none";
+                currentAngle = 0; // Reset angle when not casting
+
+                if (handsVisible) {
+                    statusText.innerText = "Tracking Hand Gestures...";
+                    statusText.style.color = "#4CAF50";
+                    statusText.style.boxShadow = "none";
+                } else {
+                    statusText.innerText = "Waiting for hands...";
+                    statusText.style.color = "#ffffff";
+                    statusText.style.boxShadow = "none";
+                }
             }
         }
 
